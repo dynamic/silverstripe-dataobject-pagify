@@ -50,7 +50,7 @@ class DataObjectPagifyDataExtension extends DataExtension
 
         $fields->addFieldToTab('Root.Main', new TextField('Title'));
         if ($this->owner->ID) {
-            $urlsegment = SiteTreeURLSegmentField::create("URLSegment", $this->owner->fieldLabel('URLSegment'));
+            $urlsegment = SiteTreeURLSegmentField::create("URLSegment", 'URL Segment');
 
             $prefix = Director::absoluteBaseURL() . 'listing-page/show/';
             $urlsegment->setURLPrefix($prefix);
@@ -63,11 +63,43 @@ class DataObjectPagifyDataExtension extends DataExtension
 
         $fields->addFieldToTab('Root.Main', ToggleCompositeField::create('Metadata', 'Metadata',
             array(
-                TextField::create("MetaTitle", $this->owner->fieldLabel('MetaTitle')),
-                TextareaField::create("MetaDescription", $this->owner->fieldLabel('MetaDescription')),
+                TextField::create("MetaTitle", 'Meta Title'),
+                TextareaField::create("MetaDescription", 'Meta Description'),
             )
         ));
 
+    }
+
+    /**
+     *
+     */
+    public function onBeforeWrite()
+    {
+        parent::onBeforeWrite();
+
+        if (!$this->owner->URLSegment) {
+            $siteTree = singleton('SiteTree');
+            $this->owner->URLSegment = $siteTree->generateURLSegment($this->owner->Title);
+        }
+        // Ensure that this object has a non-conflicting URLSegment value.
+        $count = 2;
+        while (!$this->validURLSegment()) {
+            $this->owner->URLSegment = preg_replace('/-[0-9]+$/', null, $this->owner->URLSegment) . '-' . $count;
+            $count++;
+        }
+    }
+
+    /**
+     * @return bool
+     */
+    protected function validURLSegment()
+    {
+        $exclude = array();
+        if ($this->owner->ID != 0) {
+            $exclude = array('ID' => $this->owner->ID);
+        }
+        $class = $this->owner->ClassName;
+        return !$class::get()->filter('URLSegment', $this->owner->URLSegment)->exclude($exclude)->first();
     }
 
     /**
@@ -84,7 +116,7 @@ class DataObjectPagifyDataExtension extends DataExtension
         $page = Controller::curr();
         $pages = array();
 
-        $pages[] = $this;
+        $pages[] = $this->owner;
 
         while (
             $page
